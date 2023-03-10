@@ -2,22 +2,12 @@
 // MIT License (https://github.com/Majored/rs-async-zip/blob/main/LICENSE)
 
 use crate::entry::ZipEntry;
-#[cfg(any(feature = "deflate", feature = "bzip2", feature = "zstd", feature = "lzma", feature = "xz"))]
-use crate::spec::Compression;
 
 pub(crate) const SPEC_VERSION_MADE_BY: u16 = 63;
 
 // https://github.com/Majored/rs-async-zip/blob/main/SPECIFICATION.md#443
 pub fn as_needed_to_extract(entry: &ZipEntry) -> u16 {
-    let mut version = match entry.compression() {
-        #[cfg(feature = "deflate")]
-        Compression::Deflate => 20,
-        #[cfg(feature = "bzip2")]
-        Compression::Bz => 46,
-        #[cfg(feature = "lzma")]
-        Compression::Lzma => 63,
-        _ => 10,
-    };
+    let mut version = 10;
 
     if entry.filename().ends_with('/') {
         version = std::cmp::max(version, 20);

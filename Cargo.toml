@@ -1,30 +1,19 @@
 [package]
-name = "async_zip"
+name = "async_zip_futures"
 version = "0.0.12"
 edition = "2021"
-authors = ["Harry [hello@majored.pw]"]
-repository = "https://github.com/Majored/rs-async-zip"
-description = "An asynchronous ZIP archive reading/writing crate."
+authors = ["Harry [hello@majored.pw]", "Luka Zakrajšek <luka@bancek.net>"]
+repository = "https://github.com/bancek/rs-async-zip-futures"
+description = "An asynchronous ZIP archive reading/writing crate using futures-rs."
 readme = "README.md"
 license = "MIT"
-documentation = "https://docs.rs/async_zip/"
-homepage = "https://github.com/Majored/rs-async-zip"
-keywords = ["async", "zip", "archive", "tokio"]
+documentation = "https://docs.rs/async_zip_futures/"
+homepage = "https://github.com/bancek/rs-async-zip-futures"
+keywords = ["async", "zip", "archive", "futures", "futures-rs"]
 categories = ["asynchronous", "compression"]
 
 [features]
-full = ["chrono", "fs", "deflate", "bzip2", "lzma", "zstd", "xz"]
-
-# All features that are compatible with WASM
-full-wasm = ["chrono", "deflate", "zstd"]
-
-fs = ["tokio/fs"]
-
-deflate = ["async-compression/deflate"]
-bzip2 = ["async-compression/bzip2"]
-lzma = ["async-compression/lzma"]
-zstd = ["async-compression/zstd"]
-xz = ["async-compression/xz"]
+full = ["chrono"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -33,25 +22,18 @@ all-features = true
 crc32fast = "1"
 log = "0.4.17"
 thiserror = "1"
-tokio = { version = "1", features = ["io-util"] }
 pin-project = "1"
-
-async-compression = { version = "0.3", default-features = false, features = ["tokio"], optional = true }
-chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true}
+chrono = { version = "0.4.23", default-features = false, features = [
+  "clock",
+], optional = true }
+futures = "0.3"
 
 [dev-dependencies]
 # tests
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7.7", features = ["full"] }
 env_logger = "0.10.0"
 zip = "0.6.3"
 
-# shared across multiple examples
+# examples
 anyhow = "1"
-sanitize-filename = "0.4"
-
-# actix_multipart
-actix-web = "4"
-actix-multipart = "0.6"
-futures = "0.3"
-derive_more = "0.99"
-uuid = { version = "1", features = ["v4", "serde"] } 

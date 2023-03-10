@@ -9,18 +9,12 @@ use crate::spec::{
         CentralDirectoryRecord, ExtraField, GeneralPurposeFlag, HeaderId, LocalFileHeader,
         Zip64ExtendedInformationExtraField,
     },
-    Compression,
 };
 use crate::write::{CentralDirectoryEntry, ZipFileWriter};
 
-#[cfg(any(feature = "deflate", feature = "bzip2", feature = "zstd", feature = "lzma", feature = "xz"))]
-use std::io::Cursor;
-
 use crate::spec::consts::{NON_ZIP64_MAX_NUM_FILES, NON_ZIP64_MAX_SIZE};
-#[cfg(any(feature = "deflate", feature = "bzip2", feature = "zstd", feature = "lzma", feature = "xz"))]
-use async_compression::tokio::write;
 use crc32fast::Hasher;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use futures::{AsyncWrite, AsyncWriteExt};
 
 pub struct EntryWholeWriter<'b, 'c, W: AsyncWrite + Unpin> {
     writer: &'b mut ZipFileWriter<W>,
@@ -34,19 +28,8 @@ impl<'b, 'c, W: AsyncWrite + Unpin> EntryWholeWriter<'b, 'c, W> {
     }
 
     pub async fn write(mut self) -> Result<()> {
-        let mut _compressed_data: Option<Vec<u8>> = None;
-        let compressed_data = match self.entry.compression() {
-            Compression::Stored => self.data,
-            #[cfg(any(feature = "deflate", feature = "bzip2", feature = "zstd", feature = "lzma", feature = "xz"))]
-            _ => {
-                _compressed_data =
-                    Some(compress(self.entry.compression(), self.data, self.entry.compression_level).await);
-                _compressed_data.as_ref().unwrap()
-            }
-        };
-
         let (lfh_compressed_size, lfh_uncompressed_size) = if self.data.len() as u64 > NON_ZIP64_MAX_SIZE as u64
-            || compressed_data.len() as u64 > NON_ZIP64_MAX_SIZE as u64
+            || self.data.len() as u64 > NON_ZIP64_MAX_SIZE as u64
         {
             if self.writer.force_no_zip64 {
                 return Err(ZipError::Zip64Needed(Zip64ErrorCase::LargeFile));
@@ -59,14 +42,14 @@ impl<'b, 'c, W: AsyncWrite + Unpin> EntryWholeWriter<'b, 'c, W> {
                     header_id: HeaderId::Zip64ExtendedInformationExtraField,
                     data_size: 16,
                     uncompressed_size: self.data.len() as u64,
-                    compressed_size: compressed_data.len() as u64,
+                    compressed_size: self.data.len() as u64,
                     relative_header_offset: None,
                     disk_start_number: None,
                 },
             ));
             (NON_ZIP64_MAX_SIZE, NON_ZIP64_MAX_SIZE)
         } else {
-            (compressed_data.len() as u32, self.data.len() as u32)
+            (self.data.len() as u32, self.data.len() as u32)
         };
 
         let lf_header = LocalFileHeader {
@@ -120,7 +103,7 @@ impl<'b, 'c, W: AsyncWrite + Unpin> EntryWholeWriter<'b, 'c, W> {
         self.writer.writer.write_all(&lf_header.as_slice()).await?;
         self.writer.writer.write_all(self.entry.filename().as_bytes()).await?;
         self.writer.writer.write_all(&self.entry.extra_fields().as_bytes()).await?;
-        self.writer.writer.write_all(compressed_data).await?;
+        self.writer.writer.write_all(self.data).await?;
 
         self.writer.cd_entries.push(CentralDirectoryEntry { header, entry: self.entry });
         // Ensure that we can fit this many files in this archive if forcing no zip64
@@ -134,50 +117,6 @@ impl<'b, 'c, W: AsyncWrite + Unpin> EntryWholeWriter<'b, 'c, W> {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(any(feature = "deflate", feature = "bzip2", feature = "zstd", feature = "lzma", feature = "xz"))]
-async fn compress(compression: Compression, data: &[u8], level: async_compression::Level) -> Vec<u8> {
-    // TODO: Reduce reallocations of Vec by making a lower-bound estimate of the length reduction and
-    // pre-initialising the Vec to that length. Then truncate() to the actual number of bytes written.
-    match compression {
-        #[cfg(feature = "deflate")]
-        Compression::Deflate => {
-            let mut writer = write::DeflateEncoder::with_quality(Cursor::new(Vec::new()), level);
-            writer.write_all(data).await.unwrap();
-            writer.shutdown().await.unwrap();
-            writer.into_inner().into_inner()
-        }
-        #[cfg(feature = "bzip2")]
-        Compression::Bz => {
-            let mut writer = write::BzEncoder::with_quality(Cursor::new(Vec::new()), level);
-            writer.write_all(data).await.unwrap();
-            writer.shutdown().await.unwrap();
-            writer.into_inner().into_inner()
-        }
-        #[cfg(feature = "lzma")]
-        Compression::Lzma => {
-            let mut writer = write::LzmaEncoder::with_quality(Cursor::new(Vec::new()), level);
-            writer.write_all(data).await.unwrap();
-            writer.shutdown().await.unwrap();
-            writer.into_inner().into_inner()
-        }
-        #[cfg(feature = "xz")]
-        Compression::Xz => {
-            let mut writer = write::XzEncoder::with_quality(Cursor::new(Vec::new()), level);
-            writer.write_all(data).await.unwrap();
-            writer.shutdown().await.unwrap();
-            writer.into_inner().into_inner()
-        }
-        #[cfg(feature = "zstd")]
-        Compression::Zstd => {
-            let mut writer = write::ZstdEncoder::with_quality(Cursor::new(Vec::new()), level);
-            writer.write_all(data).await.unwrap();
-            writer.shutdown().await.unwrap();
-            writer.into_inner().into_inner()
-        }
-        _ => unreachable!(),
     }
 }
 

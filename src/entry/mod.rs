@@ -3,17 +3,8 @@
 
 pub mod builder;
 
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, SeekFrom};
-
 use crate::entry::builder::ZipEntryBuilder;
-use crate::error::{Result, ZipError};
-use crate::spec::{
-    attribute::AttributeCompatibility,
-    consts::LFH_SIGNATURE,
-    date::ZipDateTime,
-    header::{ExtraField, LocalFileHeader},
-    Compression,
-};
+use crate::spec::{attribute::AttributeCompatibility, date::ZipDateTime, header::ExtraField, Compression};
 
 /// An immutable store of data about a ZIP entry.
 ///
@@ -24,8 +15,6 @@ use crate::spec::{
 pub struct ZipEntry {
     pub(crate) filename: String,
     pub(crate) compression: Compression,
-    #[cfg(any(feature = "deflate", feature = "bzip2", feature = "zstd", feature = "lzma", feature = "xz"))]
-    pub(crate) compression_level: async_compression::Level,
     pub(crate) crc32: u32,
     pub(crate) uncompressed_size: u64,
     pub(crate) compressed_size: u64,
@@ -48,8 +37,6 @@ impl ZipEntry {
         ZipEntry {
             filename,
             compression,
-            #[cfg(any(feature = "deflate", feature = "bzip2", feature = "zstd", feature = "lzma", feature = "xz"))]
-            compression_level: async_compression::Level::Default,
             crc32: 0,
             uncompressed_size: 0,
             compressed_size: 0,
@@ -137,47 +124,5 @@ impl ZipEntry {
     /// Returns whether or not the entry represents a directory.
     pub fn dir(&self) -> bool {
         self.filename.ends_with('/')
-    }
-}
-
-/// An immutable store of data about how a ZIP entry is stored within a specific archive.
-///
-/// Besides storing archive independent information like the size and timestamp it can also be used to query
-/// information about how the entry is stored in an archive.
-#[derive(Clone)]
-pub struct StoredZipEntry {
-    pub(crate) entry: ZipEntry,
-    // pub(crate) general_purpose_flag: GeneralPurposeFlag,
-    pub(crate) file_offset: u64,
-}
-
-impl StoredZipEntry {
-    /// Returns a reference to the inner ZIP entry.
-    pub fn entry(&self) -> &ZipEntry {
-        &self.entry
-    }
-
-    /// Returns the offset in bytes to where the header of the entry starts.
-    pub fn header_offset(&self) -> u64 {
-        self.file_offset
-    }
-
-    /// Seek to the offset in bytes where the data of the entry starts.
-    pub(crate) async fn seek_to_data_offset<R: AsyncRead + AsyncSeek + Unpin>(&self, mut reader: &mut R) -> Result<()> {
-        // Seek to the header
-        reader.seek(SeekFrom::Start(self.file_offset)).await?;
-
-        // Check the signature
-        match reader.read_u32_le().await? {
-            actual if actual == LFH_SIGNATURE => (),
-            actual => return Err(ZipError::UnexpectedHeaderError(actual, LFH_SIGNATURE)),
-        };
-
-        // Skip the local file header and trailing data
-        let header = LocalFileHeader::from_reader(&mut reader).await?;
-        let _filename = crate::read::io::read_string(&mut reader, header.file_name_length.into()).await?;
-        let _extra_field = crate::read::io::read_bytes(&mut reader, header.extra_field_length.into()).await?;
-
-        Ok(())
     }
 }

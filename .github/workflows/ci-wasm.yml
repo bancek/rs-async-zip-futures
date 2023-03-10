@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    name: Build ['full-wasm' feature] on ${{ matrix.target }}
+    name: Build ['full' feature] on ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -21,4 +21,4 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: rustup target add ${{ matrix.target }}
-    - run: cargo build --verbose --target ${{ matrix.target }} --features full-wasm
+    - run: cargo build --verbose --target ${{ matrix.target }} --features full

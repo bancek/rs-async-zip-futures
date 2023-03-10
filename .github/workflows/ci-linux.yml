@@ -20,26 +20,5 @@ jobs:
     - name: Test [no features]
       run: cargo test --verbose
 
-    - name: Test ['chrono' feature]
-      run: cargo test --verbose --features chrono
-
-    - name: Test ['fs' feature]
-      run: cargo test --verbose --features fs
-
-    - name: Test ['deflate' feature]
-      run: cargo test --verbose --features deflate
-
-    - name: Test ['bzip2' feature]
-      run: cargo test --verbose --features bzip2
-
-    - name: Test ['lzma' feature]
-      run: cargo test --verbose --features lzma
-
-    - name: Test ['zstd' feature]
-      run: cargo test --verbose --features zstd
-
-    - name: Test ['xz' feature]
-      run: cargo test --verbose --features xz
-
     - name: Test ['full' feature]
       run: cargo test --verbose --features full

@@ -1,13 +1,12 @@
 // Copyright (c) 2022 Harry [Majored] [hello@majored.pw]
 // MIT License (https://github.com/Majored/rs-async-zip/blob/main/LICENSE)
 
+use futures::{io::Cursor, AsyncWriteExt};
+
 use crate::write::io::offset::AsyncOffsetWriter;
 
 #[tokio::test]
 async fn basic() {
-    use std::io::Cursor;
-    use tokio::io::AsyncWriteExt;
-
     let mut writer = AsyncOffsetWriter::new(Cursor::new(Vec::new()));
     assert_eq!(writer.offset(), 0);
 

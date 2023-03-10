@@ -1,13 +1,10 @@
 // Copyright (c) 2021 Harry [Majored] [hello@majored.pw]
 // MIT License (https://github.com/Majored/rs-async-zip/blob/main/LICENSE)
 
-use crate::error::{Result, ZipError};
 use crate::spec::header::{
-    CentralDirectoryRecord, EndOfCentralDirectoryHeader, ExtraField, GeneralPurposeFlag, HeaderId, LocalFileHeader,
+    CentralDirectoryRecord, EndOfCentralDirectoryHeader, GeneralPurposeFlag, LocalFileHeader,
     Zip64EndOfCentralDirectoryLocator, Zip64EndOfCentralDirectoryRecord,
 };
-
-use tokio::io::{AsyncRead, AsyncReadExt};
 
 impl LocalFileHeader {
     pub fn as_slice(&self) -> [u8; 26] {
@@ -183,37 +180,7 @@ impl From<[u8; 16]> for Zip64EndOfCentralDirectoryLocator {
     }
 }
 
-impl LocalFileHeader {
-    pub async fn from_reader<R: AsyncRead + Unpin>(reader: &mut R) -> Result<LocalFileHeader> {
-        let mut buffer: [u8; 26] = [0; 26];
-        reader.read_exact(&mut buffer).await?;
-        Ok(LocalFileHeader::from(buffer))
-    }
-}
-
-impl EndOfCentralDirectoryHeader {
-    pub async fn from_reader<R: AsyncRead + Unpin>(reader: &mut R) -> Result<EndOfCentralDirectoryHeader> {
-        let mut buffer: [u8; 18] = [0; 18];
-        reader.read_exact(&mut buffer).await?;
-        Ok(EndOfCentralDirectoryHeader::from(buffer))
-    }
-}
-
-impl CentralDirectoryRecord {
-    pub async fn from_reader<R: AsyncRead + Unpin>(reader: &mut R) -> Result<CentralDirectoryRecord> {
-        let mut buffer: [u8; 42] = [0; 42];
-        reader.read_exact(&mut buffer).await?;
-        Ok(CentralDirectoryRecord::from(buffer))
-    }
-}
-
 impl Zip64EndOfCentralDirectoryRecord {
-    pub async fn from_reader<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Zip64EndOfCentralDirectoryRecord> {
-        let mut buffer: [u8; 52] = [0; 52];
-        reader.read_exact(&mut buffer).await?;
-        Ok(Self::from(buffer))
-    }
-
     pub fn as_bytes(&self) -> [u8; 52] {
         let mut array = [0; 52];
         let mut cursor = 0;
@@ -233,20 +200,6 @@ impl Zip64EndOfCentralDirectoryRecord {
 }
 
 impl Zip64EndOfCentralDirectoryLocator {
-    /// Read 4 bytes from the reader and check whether its signature matches that of the EOCDL.
-    /// If it does, return Some(EOCDL), otherwise return None.
-    pub async fn try_from_reader<R: AsyncRead + Unpin>(
-        reader: &mut R,
-    ) -> Result<Option<Zip64EndOfCentralDirectoryLocator>> {
-        let signature = reader.read_u32_le().await?;
-        if signature != ZIP64_EOCDL_SIGNATURE {
-            return Ok(None);
-        }
-        let mut buffer: [u8; 16] = [0; 16];
-        reader.read_exact(&mut buffer).await?;
-        Ok(Some(Self::from(buffer)))
-    }
-
     pub fn as_bytes(&self) -> [u8; 16] {
         let mut array = [0; 16];
         let mut cursor = 0;
@@ -259,23 +212,6 @@ impl Zip64EndOfCentralDirectoryLocator {
     }
 }
 
-/// Parse the extra fields.
-pub fn parse_extra_fields(data: Vec<u8>) -> Result<Vec<ExtraField>> {
-    let mut cursor = 0;
-    let mut extra_fields = Vec::new();
-    while cursor + 4 < data.len() {
-        let header_id: HeaderId = u16::from_le_bytes(data[cursor..cursor + 2].try_into().unwrap()).into();
-        let field_size = u16::from_le_bytes(data[cursor + 2..cursor + 4].try_into().unwrap());
-        if cursor + 4 + field_size as usize > data.len() {
-            return Err(ZipError::InvalidExtraFieldHeader(field_size, data.len() - cursor - 8 - field_size as usize));
-        }
-        let data = &data[cursor + 4..cursor + 4 + field_size as usize];
-        extra_fields.push(extra_field_from_bytes(header_id, field_size, data)?);
-        cursor += 4 + field_size as usize;
-    }
-    Ok(extra_fields)
-}
-
 /// Replace elements of an array at a given cursor index for use with a zero-initialised array.
 macro_rules! array_push {
     ($arr:ident, $cursor:ident, $value:expr) => {{
@@ -286,8 +222,6 @@ macro_rules! array_push {
     }};
 }
 
-use crate::spec::consts::ZIP64_EOCDL_SIGNATURE;
-use crate::spec::extra_field::extra_field_from_bytes;
 pub(crate) use array_push;
 
 #[cfg(test)]
@@ -317,24 +251,6 @@ mod tests {
                 num_entries_in_directory: 1,
                 directory_size: 47,
                 offset_of_start_of_directory: 64,
-            }
-        )
-    }
-
-    #[tokio::test]
-    async fn test_parse_zip64_eocdl() {
-        let eocdl: [u8; 20] = [
-            0x50, 0x4B, 0x06, 0x07, 0x00, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
-            0x00, 0x00,
-        ];
-        let mut cursor = std::io::Cursor::new(eocdl);
-        let zip64eocdl = Zip64EndOfCentralDirectoryLocator::try_from_reader(&mut cursor).await.unwrap().unwrap();
-        assert_eq!(
-            zip64eocdl,
-            Zip64EndOfCentralDirectoryLocator {
-                number_of_disk_with_start_of_zip64_end_of_central_directory: 0,
-                relative_offset: 111,
-                total_number_of_disks: 1,
             }
         )
     }

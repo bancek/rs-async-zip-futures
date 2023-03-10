@@ -1,15 +1,16 @@
 // Copyright Cognite AS, 2023
 
+use std::io::Read;
+
+use futures::AsyncWriteExt;
+
 use crate::error::{Zip64ErrorCase, ZipError};
 use crate::spec::consts::NON_ZIP64_MAX_SIZE;
+use crate::spec::header::ExtraField;
 use crate::tests::init_logger;
 use crate::tests::write::AsyncSink;
 use crate::write::ZipFileWriter;
 use crate::{Compression, ZipEntryBuilder};
-use std::io::Read;
-
-use crate::spec::header::ExtraField;
-use tokio::io::AsyncWriteExt;
 
 // Useful constants for writing a large file.
 const BATCH_SIZE: usize = 100_000;
@@ -97,43 +98,6 @@ async fn test_write_large_zip64_file() {
     assert_eq!(bytes_total, BATCHED_FILE_SIZE);
 }
 
-/// Test writing a file, and reading it with async-zip
-#[tokio::test]
-async fn test_write_large_zip64_file_self_read() {
-    use tokio::io::AsyncReadExt;
-
-    init_logger();
-
-    // Allocate space with some extra for metadata records
-    let mut buffer = Vec::with_capacity(BATCHED_FILE_SIZE + 100_000);
-    let mut writer = ZipFileWriter::new(&mut buffer);
-
-    let entry = ZipEntryBuilder::new("file".to_string(), Compression::Stored);
-    let mut entry_writer = writer.write_entry_stream(entry).await.unwrap();
-    for _ in 0..NUM_BATCHES {
-        entry_writer.write_all(&[0; BATCH_SIZE]).await.unwrap();
-    }
-    entry_writer.close().await.unwrap();
-    writer.close().await.unwrap();
-
-    let reader = crate::read::mem::ZipFileReader::new(buffer).await.unwrap();
-    assert!(reader.file().zip64);
-    assert_eq!(reader.file().entries[0].entry.filename, "file");
-    assert_eq!(reader.file().entries[0].entry.compressed_size, BATCHED_FILE_SIZE as u64);
-    let mut entry = reader.entry(0).await.unwrap();
-
-    let mut buffer = [0; 100_000];
-    let mut bytes_total = 0;
-    loop {
-        let read_bytes = entry.read(&mut buffer).await.unwrap();
-        if read_bytes == 0 {
-            break;
-        }
-        bytes_total += read_bytes;
-    }
-    assert_eq!(bytes_total, BATCHED_FILE_SIZE);
-}
-
 /// Test writing a zip64 file with more than u16::MAX files.
 #[tokio::test]
 async fn test_write_zip64_file_many_entries() {
@@ -168,7 +132,7 @@ async fn test_zip64_when_many_files_whole() {
     let mut writer = ZipFileWriter::new(&mut sink);
     for i in 0..=u16::MAX as u32 + 1 {
         let entry = ZipEntryBuilder::new(format!("{i}"), Compression::Stored);
-        writer.write_entry_whole(entry, &[]).await.unwrap()
+        writer.write_entry_whole(entry, &[]).await.unwrap();
     }
     assert!(writer.is_zip64);
     writer.close().await.unwrap();

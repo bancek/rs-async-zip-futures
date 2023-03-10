@@ -42,15 +42,6 @@ impl ZipEntryBuilder {
         self
     }
 
-    /// Set the deflate compression option.
-    ///
-    /// If the compression type isn't deflate, this option has no effect.
-    #[cfg(any(feature = "deflate", feature = "bzip2", feature = "zstd", feature = "lzma", feature = "xz"))]
-    pub fn deflate_option(mut self, option: crate::DeflateOption) -> Self {
-        self.0.compression_level = option.into_level();
-        self
-    }
-
     /// Sets the entry's attribute host compatibility.
     pub fn attribute_compatibility(mut self, compatibility: AttributeCompatibility) -> Self {
         self.0.attribute_compatibility = compatibility;
@@ -101,7 +92,7 @@ impl ZipEntryBuilder {
     ///
     /// This is equivalent to:
     /// ```
-    /// # use async_zip::{ZipEntry, ZipEntryBuilder, Compression};
+    /// # use async_zip_futures::{ZipEntry, ZipEntryBuilder, Compression};
     /// #
     /// # let builder = ZipEntryBuilder::new(String::from("foo.bar"), Compression::Stored);
     /// let entry: ZipEntry = builder.into();

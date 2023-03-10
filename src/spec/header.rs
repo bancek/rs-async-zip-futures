@@ -94,7 +94,7 @@ pub struct EndOfCentralDirectoryHeader {
 }
 
 // https://github.com/Majored/rs-async-zip/blob/main/SPECIFICATION.md#4314
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Zip64EndOfCentralDirectoryRecord {
     /// The size of this Zip64EndOfCentralDirectoryRecord.
     /// This is specified because there is a variable-length extra zip64 information sector.
@@ -111,7 +111,7 @@ pub struct Zip64EndOfCentralDirectoryRecord {
 }
 
 // https://github.com/Majored/rs-async-zip/blob/main/SPECIFICATION.md#4315
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Zip64EndOfCentralDirectoryLocator {
     pub number_of_disk_with_start_of_zip64_end_of_central_directory: u32,
     pub relative_offset: u64,

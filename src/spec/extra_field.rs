@@ -1,6 +1,5 @@
 // Copyright Cognite AS, 2023
 
-use crate::error::{Result as ZipResult, ZipError};
 use crate::spec::header::{ExtraField, HeaderId, UnknownExtraField, Zip64ExtendedInformationExtraField};
 
 impl From<u16> for HeaderId {
@@ -94,44 +93,5 @@ impl ExtraFieldAsBytes for Zip64ExtendedInformationExtraField {
     fn count_bytes(&self) -> usize {
         20 + self.relative_header_offset.map(|_| 8).unwrap_or_default()
             + self.disk_start_number.map(|_| 8).unwrap_or_default()
-    }
-}
-
-/// Parse a zip64 extra field from bytes.
-/// The content of "data" should exclude the header.
-fn zip64_extended_information_field_from_bytes(
-    header_id: HeaderId,
-    data_size: u16,
-    data: &[u8],
-) -> ZipResult<Zip64ExtendedInformationExtraField> {
-    // First ensure that the data is sufficient to populate compressed & uncompressed size.
-    if data.len() < 16 {
-        return Err(ZipError::Zip64ExtendedFieldIncomplete);
-    }
-    let uncompressed_size = u64::from_le_bytes(data[0..8].try_into().unwrap());
-    let compressed_size = u64::from_le_bytes(data[8..16].try_into().unwrap());
-    let relative_header_offset =
-        if data.len() >= 24 { Some(u64::from_le_bytes(data[16..24].try_into().unwrap())) } else { None };
-    let disk_start_number =
-        if data.len() >= 32 { Some(u64::from_le_bytes(data[24..32].try_into().unwrap())) } else { None };
-
-    Ok(Zip64ExtendedInformationExtraField {
-        header_id,
-        data_size,
-        uncompressed_size,
-        compressed_size,
-        relative_header_offset,
-        disk_start_number,
-    })
-}
-
-pub(crate) fn extra_field_from_bytes(header_id: HeaderId, data_size: u16, data: &[u8]) -> ZipResult<ExtraField> {
-    match header_id {
-        HeaderId::Zip64ExtendedInformationExtraField => Ok(ExtraField::Zip64ExtendedInformationExtraField(
-            zip64_extended_information_field_from_bytes(header_id, data_size, data)?,
-        )),
-        header_id @ HeaderId::Other(_) => {
-            Ok(ExtraField::UnknownExtraField(UnknownExtraField { header_id, data_size, content: data.to_vec() }))
-        }
     }
 }

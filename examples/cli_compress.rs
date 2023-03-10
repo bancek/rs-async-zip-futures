@@ -3,7 +3,6 @@
 
 #[tokio::main]
 async fn main() {
-    #[cfg(features = "deflate")]
     if let Err(err) = inner::run().await {
         eprintln!("Error: {}", err);
         eprintln!("Usage: cli_compress <input file or directory> <output ZIP file name>");
@@ -11,19 +10,19 @@ async fn main() {
     }
 }
 
-#[cfg(features = "deflate")]
 mod inner {
 
-    use async_zip::write::ZipFileWriter;
-    use async_zip::{Compression, ZipEntryBuilder};
+    use async_zip_futures::write::ZipFileWriter;
+    use async_zip_futures::{Compression, ZipEntryBuilder};
+    use futures::io;
+    use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
     use std::path::{Path, PathBuf};
 
     use anyhow::{anyhow, bail, Result};
     use tokio::fs::File;
-    use tokio::io::AsyncReadExt;
 
-    async fn run() -> Result<()> {
+    pub async fn run() -> Result<()> {
         let mut args = std::env::args().skip(1);
 
         let input_str = args.next().ok_or(anyhow!("No input file or directory specified."))?;
@@ -42,7 +41,9 @@ mod inner {
             bail!("The input file or directory specified doesn't exist.");
         }
 
-        let mut output_writer = ZipFileWriter::new(File::create(output_path).await?);
+        let file = File::create(output_path).await?;
+
+        let mut output_writer = ZipFileWriter::new(file.compat());
 
         if input_path.is_dir() {
             handle_directory(input_path, &mut output_writer).await?;
@@ -56,14 +57,14 @@ mod inner {
         Ok(())
     }
 
-    async fn handle_singular(input_path: &Path, writer: &mut ZipFileWriter<File>) -> Result<()> {
+    async fn handle_singular(input_path: &Path, writer: &mut ZipFileWriter<Compat<File>>) -> Result<()> {
         let filename = input_path.file_name().ok_or(anyhow!("Input path terminates in '...'."))?;
         let filename = filename.to_str().ok_or(anyhow!("Input path not valid UTF-8."))?;
 
         write_entry(filename, input_path, writer).await
     }
 
-    async fn handle_directory(input_path: &Path, writer: &mut ZipFileWriter<File>) -> Result<()> {
+    async fn handle_directory(input_path: &Path, writer: &mut ZipFileWriter<Compat<File>>) -> Result<()> {
         let entries = walk_dir(input_path.into()).await?;
         let input_dir_str = input_path.as_os_str().to_str().ok_or(anyhow!("Input path not valid UTF-8."))?;
 
@@ -82,15 +83,16 @@ mod inner {
         Ok(())
     }
 
-    async fn write_entry(filename: &str, input_path: &Path, writer: &mut ZipFileWriter<File>) -> Result<()> {
-        let mut input_file = File::open(input_path).await?;
-        let input_file_size = input_file.metadata().await?.len() as usize;
+    async fn write_entry(filename: &str, input_path: &Path, writer: &mut ZipFileWriter<Compat<File>>) -> Result<()> {
+        let input_file = File::open(input_path).await?;
 
-        let mut buffer = Vec::with_capacity(input_file_size);
-        input_file.read_to_end(&mut buffer).await?;
+        let builder = ZipEntryBuilder::new(filename.into(), Compression::Stored);
 
-        let builder = ZipEntryBuilder::new(filename.into(), Compression::Deflate);
-        writer.write_entry_whole(builder, &buffer).await?;
+        let mut stream_writer = writer.write_entry_stream(builder).await?;
+
+        io::copy(input_file.compat(), &mut stream_writer).await?;
+
+        stream_writer.close().await?;
 
         Ok(())
     }

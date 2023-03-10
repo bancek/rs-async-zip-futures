@@ -5,19 +5,19 @@
 //!
 //! # Example
 //! ### Whole data (u8 slice)
-//! ```no_run
-//! # #[cfg(feature = "deflate")]
+//! ```
 //! # {
-//! # use async_zip::{Compression, ZipEntryBuilder, write::ZipFileWriter};
-//! # use tokio::{fs::File, io::AsyncWriteExt};
-//! # use async_zip::error::ZipError;
+//! # use async_zip_futures::{Compression, error::ZipError, ZipEntryBuilder, write::ZipFileWriter};
+//! # use futures::AsyncWriteExt;
+//! # use tokio::fs::File;
+//! # use tokio_util::compat::TokioAsyncReadCompatExt;
 //! #
 //! # async fn run() -> Result<(), ZipError> {
-//! let mut file = File::create("foo.zip").await?;
+//! let mut file = File::create("foo.zip").await?.compat();
 //! let mut writer = ZipFileWriter::new(&mut file);
 //!
 //! let data = b"This is an example file.";
-//! let opts = ZipEntryBuilder::new(String::from("foo.txt"), Compression::Deflate);
+//! let opts = ZipEntryBuilder::new(String::from("foo.txt"), Compression::Stored);
 //!
 //! writer.write_entry_whole(opts, data).await?;
 //! writer.close().await?;
@@ -26,19 +26,19 @@
 //! # }
 //! ```
 //! ### Stream data (unknown size & data)
-//! ```no_run
-//! # #[cfg(feature = "deflate")]
+//! ```
 //! # {
-//! # use async_zip::{Compression, ZipEntryBuilder, write::ZipFileWriter};
-//! # use tokio::{fs::File, io::AsyncWriteExt};
-//! # use async_zip::error::ZipError;
+//! # use async_zip_futures::{Compression, error::ZipError, ZipEntryBuilder, write::ZipFileWriter};
+//! # use futures::AsyncWriteExt;
+//! # use tokio::fs::File;
+//! # use tokio_util::compat::TokioAsyncReadCompatExt;
 //! #
 //! # async fn run() -> Result<(), ZipError> {
-//! let mut file = File::create("foo.zip").await?;
+//! let mut file = File::create("foo.zip").await?.compat();
 //! let mut writer = ZipFileWriter::new(&mut file);
 //!
 //! let data = b"This is an example file.";
-//! let opts = ZipEntryBuilder::new(String::from("bar.txt"), Compression::Deflate);
+//! let opts = ZipEntryBuilder::new(String::from("bar.txt"), Compression::Stored);
 //!
 //! let mut entry_writer = writer.write_entry_stream(opts).await?;
 //! entry_writer.write_all(data).await.unwrap();
@@ -56,6 +56,7 @@ pub(crate) mod entry_whole;
 pub(crate) mod io;
 
 pub use entry_stream::EntryStreamWriter;
+use futures::{AsyncWrite, AsyncWriteExt};
 
 use crate::entry::ZipEntry;
 use crate::error::Result;
@@ -68,7 +69,6 @@ use entry_whole::EntryWholeWriter;
 use io::offset::AsyncOffsetWriter;
 
 use crate::spec::consts::{NON_ZIP64_MAX_NUM_FILES, NON_ZIP64_MAX_SIZE};
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 pub(crate) struct CentralDirectoryEntry {
     pub header: CentralDirectoryRecord,
