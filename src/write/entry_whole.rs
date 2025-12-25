@@ -63,13 +63,7 @@ impl<'b, 'c, W: AsyncWrite + Unpin> EntryWholeWriter<'b, 'c, W> {
                 .count_bytes()
                 .try_into()
                 .map_err(|_| ZipError::ExtraFieldTooLarge)?,
-            file_name_length: self
-                .entry
-                .filename()
-                .as_bytes()
-                .len()
-                .try_into()
-                .map_err(|_| ZipError::FileNameTooLarge)?,
+            file_name_length: self.entry.filename().len().try_into().map_err(|_| ZipError::FileNameTooLarge)?,
             mod_time: self.entry.last_modification_date().time,
             mod_date: self.entry.last_modification_date().date,
             version: crate::spec::version::as_needed_to_extract(&self.entry),

@@ -16,7 +16,8 @@ jobs:
     strategy:
       matrix:
         target:
-          - wasm32-wasi
+          - wasm32-wasip1
+          - wasm32-wasip2
           - wasm32-unknown-unknown
     steps:
     - uses: actions/checkout@v4
