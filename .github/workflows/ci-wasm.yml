@@ -20,6 +20,6 @@ jobs:
           - wasm32-wasip2
           - wasm32-unknown-unknown
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - run: rustup target add ${{ matrix.target }}
     - run: cargo build --verbose --target ${{ matrix.target }} --features full
